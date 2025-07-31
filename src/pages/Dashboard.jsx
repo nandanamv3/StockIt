@@ -29,7 +29,7 @@ const Dashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      // Fetch products count and low stock items
+  
       const { data: products } = await supabase
         .from('products')
         .select('id, stock_quantity, low_stock_threshold')
@@ -105,13 +105,13 @@ const Dashboard = () => {
 
   const statCards = [
     {
-      title: 'Total Sales',
-      value: `$${stats.totalSales.toLocaleString()}`,
-      icon: DollarSign,
-      color: 'text-green-600',
-      bgColor: 'bg-green-50',
-      change: '+12.5%',
-    },
+    title: 'Total Sales',
+    value: `₹${stats.totalSales.toLocaleString('en-IN')}`,
+    icon: DollarSign,
+    color: 'text-green-600',
+    bgColor: 'bg-green-50',
+    change: '+12.5%',
+  },
     {
       title: 'Total Orders',
       value: stats.totalOrders.toString(),
@@ -191,15 +191,14 @@ const Dashboard = () => {
                 <XAxis dataKey="day" />
                 <YAxis />
                 <Tooltip 
-                  formatter={(value, name) => [`$${value}`, 'Sales']}
-                  labelFormatter={(label) => `Day: ${label}`}
-                />
+  formatter={(value, name) => [`₹${value.toLocaleString('en-IN')}`, 'Sales']}
+  labelFormatter={(label) => `Day: ${label}`}
+/>
                 <Bar dataKey="sales" fill="#3B82F6" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
 
-          {/* Top Products */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-6">Top Selling Products</h3>
             <div className="space-y-4">
@@ -215,7 +214,7 @@ const Dashboard = () => {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold text-gray-900">${product.revenue}</p>
+                    <p className="font-semibold text-gray-900">₹{product.revenue.toLocaleString('en-IN')}</p>
                     <p className="text-sm text-gray-600">Revenue</p>
                   </div>
                 </div>
