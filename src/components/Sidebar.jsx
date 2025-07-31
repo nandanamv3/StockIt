@@ -1,0 +1,32 @@
+import React from 'react';
+import { NavLink } from 'react-router-dom';
+
+const menu = [
+  { name: 'Dashboard', path: '/dashboard' },
+  { name: 'Product Management', path: '/dashboard/products' },
+  { name: 'Order Management', path: '/dashboard/orders' },
+  { name: 'Inventory Log', path: '/dashboard/inventory' },
+];
+
+export default function Sidebar() {
+  return (
+    <aside className="w-64 bg-white shadow-lg min-h-screen p-6">
+      <nav className="flex flex-col gap-4">
+        {menu.map((item) => (
+          <NavLink
+            key={item.name}
+            to={item.path}
+            className={({ isActive }) =>
+              `px-4 py-2 rounded-lg font-medium transition-colors ${
+                isActive ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-blue-50'
+              }`
+            }
+            end={item.path === '/dashboard'}
+          >
+            {item.name}
+          </NavLink>
+        ))}
+      </nav>
+    </aside>
+  );
+}
