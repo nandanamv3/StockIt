@@ -21,7 +21,9 @@ const Dashboard = () => {
   })
   const [topProducts, setTopProducts] = useState([])
   const [salesData, setSalesData] = useState([])
+  const [lowStockProducts, setLowStockProducts] = useState([])
   const [loading, setLoading] = useState(true)
+  const [showLowStockDetails, setShowLowStockDetails] = useState(false)
 
   useEffect(() => {
     fetchDashboardData()
@@ -29,14 +31,17 @@ const Dashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-  
+      // Fetch products
       const { data: products } = await supabase
         .from('products')
-        .select('id, stock_quantity, low_stock_threshold')
-      
-      const totalProducts = products?.length || 0
-      const lowStockItems = products?.filter(p => p.stock_quantity <= (p.low_stock_threshold || 5)).length || 0
+        .select('id, name, quantity, price, low_stock_threshold')
 
+      console.log('Fetched products:', products)
+
+      const totalProducts = products?.length || 0
+      const lowStockItems = products?.filter(p => (p.quantity ?? 0) <= (p.low_stock_threshold ?? 5)).length || 0
+
+      // Fetch orders
       const { data: orders } = await supabase
         .from('orders')
         .select('id, status, total_amount, created_at')
@@ -48,13 +53,19 @@ const Dashboard = () => {
 
       const salesByDay = generateSalesData(completedOrders)
 
-      // Fetch top products (mock data for now)
-      const mockTopProducts = [
-        { name: 'Product A', sales: 45, revenue: 2250 },
-        { name: 'Product B', sales: 32, revenue: 1600 },
-        { name: 'Product C', sales: 28, revenue: 1400 },
-        { name: 'Product D', sales: 19, revenue: 950 },
-      ]
+      // Top products by quantity 
+      const sortedProducts = [...(products || [])]
+        .sort((a, b) => (b.quantity ?? 0) - (a.quantity ?? 0))
+        .slice(0, 4)
+        .map(p => ({
+          name: p.name,
+          sales: p.quantity ?? 0,
+          revenue: ((p.price ?? 0) * (p.quantity ?? 0)),
+        }))
+
+      const lowStockProductsArr = products?.filter(
+        p => (p.quantity ?? 0) <= (p.low_stock_threshold ?? 5)
+      ) || []
 
       setStats({
         totalSales,
@@ -63,9 +74,9 @@ const Dashboard = () => {
         lowStockItems,
         pendingOrders,
       })
-      
-      setTopProducts(mockTopProducts)
+      setTopProducts(sortedProducts)
       setSalesData(salesByDay)
+      setLowStockProducts(lowStockProductsArr)
       setLoading(false)
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
@@ -105,13 +116,13 @@ const Dashboard = () => {
 
   const statCards = [
     {
-    title: 'Total Sales',
-    value: `₹${stats.totalSales.toLocaleString('en-IN')}`,
-    icon: DollarSign,
-    color: 'text-green-600',
-    bgColor: 'bg-green-50',
-    change: '+12.5%',
-  },
+      title: 'Total Sales',
+      value: `₹${stats.totalSales.toLocaleString('en-IN')}`,
+      icon: DollarSign,
+      color: 'text-green-600',
+      bgColor: 'bg-green-50',
+      change: '+12.5%',
+    },
     {
       title: 'Total Orders',
       value: stats.totalOrders.toString(),
@@ -135,6 +146,7 @@ const Dashboard = () => {
       color: 'text-red-600',
       bgColor: 'bg-red-50',
       urgent: stats.lowStockItems > 0,
+      onClick: () => setShowLowStockDetails((prev) => !prev),
     },
   ]
 
@@ -143,7 +155,7 @@ const Dashboard = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600 mt-2">Welcome back! Here's what's happening with your business.</p>
+          <p className="text-gray-600 mt-2">Welcome back!</p>
         </div>
 
         {/* Stats Cards */}
@@ -151,7 +163,11 @@ const Dashboard = () => {
           {statCards.map((card, index) => {
             const Icon = card.icon
             return (
-              <div key={index} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow duration-200">
+              <div
+                key={index}
+                className={`bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow duration-200 ${card.title === 'Low Stock Items' ? 'cursor-pointer' : ''}`}
+                onClick={card.onClick ? card.onClick : undefined}
+              >
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-600 mb-1">{card.title}</p>
@@ -175,6 +191,24 @@ const Dashboard = () => {
           })}
         </div>
 
+        {showLowStockDetails && lowStockProducts.length > 0 && (
+      <div className="mb-8">
+        <h3 className="text-lg font-semibold text-red-600 mb-4">Low Stock Products</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {lowStockProducts.map((product) => (
+            <div 
+              key={product.id} 
+              className="bg-white border border-red-200 rounded-lg shadow-sm p-4 hover:shadow-md transition-shadow duration-200"
+            >
+              <h4 className="font-semibold text-gray-900">{product.name}</h4>
+              <p className="text-sm text-gray-600">Quantity Left: {product.quantity}</p>
+              <p className="text-sm text-gray-600">Price: ₹{product.price?.toLocaleString('en-IN') || 0}</p>
+              <p className="text-xs text-red-500 mt-2">Low stock threshold: {product.low_stock_threshold}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
           {/* Sales Chart */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -191,7 +225,7 @@ const Dashboard = () => {
                 <XAxis dataKey="day" />
                 <YAxis />
                 <Tooltip 
-  formatter={(value, name) => [`₹${value.toLocaleString('en-IN')}`, 'Sales']}
+  formatter={(value) => [`₹${value.toLocaleString('en-IN')}`, 'Sales']}
   labelFormatter={(label) => `Day: ${label}`}
 />
                 <Bar dataKey="sales" fill="#3B82F6" radius={[4, 4, 0, 0]} />
@@ -200,7 +234,7 @@ const Dashboard = () => {
           </div>
 
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-6">Top Selling Products</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-6">Products in Stock</h3>
             <div className="space-y-4">
               {topProducts.map((product, index) => (
                 <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
