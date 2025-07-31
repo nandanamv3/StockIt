@@ -59,14 +59,6 @@ const DashboardHome = () => {
         throw productsError;
       }
 
-        .from('products')
-        .select('id, name, quantity, price, low_stock_threshold, user_id')
-        .eq('user_id', userId);
-
-      if (productsError) {
-        throw productsError;
-      }
-
       const totalProducts = products?.length || 0;
       const lowStockProductsArr = (products || []).filter(
         (p) => (p.quantity ?? 0) <= (p.low_stock_threshold ?? 5)

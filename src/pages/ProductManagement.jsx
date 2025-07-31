@@ -31,21 +31,21 @@ function Products() {
   }, []);
 
   // Fetch products
-  useEffect(() => {
-    async function fetchProducts() {
-      if (!user?.id) return;
-      const { data, error } = await supabase
-        .from('products')
-        .select('id, name, sku, quantity, price, category, image_url, low_stock_threshold, created_at, user_id')
-        .eq('user_id', user.id);
-      if (error) {
-        setError(error.message);
-      } else {
-        setProducts(data);
-      }
+useEffect(() => {
+  async function fetchProducts() {
+    if (!user?.id) return;
+    const { data, error } = await supabase
+      .from('products')
+      .select('id, name, sku, quantity, price, category, image_url, low_stock_threshold, created_at, user_id')
+      .eq('user_id', user.id);
+    if (error) {
+      setError(error.message);
+    } else {
+      setProducts(data);
     }
-    fetchProducts();
-  }, []);
+  }
+  fetchProducts();
+}, [user]);
 
 
   // Handle form input changes
