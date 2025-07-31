@@ -37,6 +37,7 @@ const Dashboard = () => {
         .select('id, name, quantity, price, low_stock_threshold')
 
       console.log('Fetched products:', products)
+      console.log('Testing')
 
       const totalProducts = products?.length || 0
       const lowStockItems = products?.filter(p => (p.quantity ?? 0) <= (p.low_stock_threshold ?? 5)).length || 0
