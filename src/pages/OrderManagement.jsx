@@ -2,22 +2,20 @@ import React, { useState, useEffect } from 'react';
 import supabase from '../lib/supabase';
 
 const OrderManagement = () => {
-
-  const [orders, setOrders] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [showForm, setShowForm] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [message, setMessage] = useState(null);
-  const [messageType, setMessageType] = useState('');
-  const [userId, setUserId] = useState(null);
-  const [user, setUser] = useState(null);
-  const [newOrder, setNewOrder] = useState({
-    customer_name: '',
-    customer_contact: '',
-    items: [{ product_id: '', quantity: 1 }]
-  });
-
+  const [orders, setOrders] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [message, setMessage] = useState(null);
+  const [messageType, setMessageType] = useState('');
+  const [userId, setUserId] = useState(null);
+  const [user, setUser] = useState(null);
+  const [newOrder, setNewOrder] = useState({
+    customer_name: '',
+    customer_contact: '',
+    items: [{ product_id: '', quantity: 1 }]
+  });
 
   useEffect(() => {
     if (message) {
@@ -29,161 +27,101 @@ const OrderManagement = () => {
     }
   }, [message]);
 
+  useEffect(() => {
+    async function getSession() {
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user ?? null);
+      setUserId(session?.user?.id ?? null);
+    }
+    getSession();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      setUserId(session?.user?.id ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
-  // Get logged-in user from Supabase
-  useEffect(() => {
-    async function getSession() {
-      const { data: { session } } = await supabase.auth.getSession();
-      setUser(session?.user ?? null);
-      setUserId(session?.user?.id ?? null);
-    }
-    getSession();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      setUserId(session?.user?.id ?? null);
-    });
-    return () => subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (userId) {
-      fetchOrders();
-      fetchProducts();
-    } else {
-      setOrders([]);
-    }
-  }, [userId]);
-  
+  useEffect(() => {
+    if (userId) {
+      fetchOrders();
+      fetchProducts();
+    } else {
+      setOrders([]);
+    }
+  }, [userId]);
 
   const displayMessage = (msg, type) => {
     setMessage(msg);
     setMessageType(type);
   };
 
+  const fetchOrders = async () => {
+    setLoading(true);
+    if (!userId) {
+      setOrders([]);
+      setLoading(false);
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          order_items (
+            *,
+            products (id, name, price, sku)
+          )
+        `)
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setOrders(data || []);
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+      displayMessage('Error fetching orders: ' + error.message, 'error');
+    }
+    setLoading(false);
+  };
 
-  const fetchOrders = async () => {
-    setLoading(true);
-    if (!userId) {
-      setOrders([]);
-      setLoading(false);
-      return;
-    }
-    try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          order_items (
-            *,
-            products (id, name, price)
-          )
-        `)
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      setOrders(data || []);
-    } catch (error) {
-      console.error('Error fetching orders:', error);
-      displayMessage('Error fetching orders: ' + error.message, 'error');
-    }
-    setLoading(false);
-  };
+  const fetchProducts = async () => {
+    try {
+      if (!userId) {
+        setProducts([]);
+        return;
+      }
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, name, price, quantity, sku')
+        .eq('user_id', userId)
+        .gt('quantity', 0);
+      if (error) throw error;
+      setProducts(data || []);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      displayMessage('Error fetching products: ' + error.message, 'error');
+    }
+  };
 
-  const fetchProducts = async () => {
-    try {
-      if (!userId) {
-        setProducts([]);
-        return;
-      }
-      const { data, error } = await supabase
-        .from('products')
-        .select('id, name, price, quantity, user_id')
-        .eq('user_id', userId)
-        .gt('quantity', 0);
-      if (error) throw error;
-      setProducts(data || []);
-    } catch (error) {
-      console.error('Error fetching products:', error);
-      displayMessage('Error fetching products: ' + error.message, 'error');
-    }
-  };
-
-  const createOrder = async () => {
-    if (!newOrder.customer_name || newOrder.items.some(item => !item.product_id || item.quantity <= 0)) {
-      displayMessage('Please fill all required fields and ensure item quantities are positive.', 'error');
-      return;
-    }
-    setLoading(true);
-    try {
-      const { data: order, error: orderError } = await supabase
-        .from('orders')
-        .insert({
-          user_id: userId,
-          customer_name: newOrder.customer_name,
-          customer_contact: newOrder.customer_contact,
-          status: 'pending',
-          order_date: new Date().toISOString()
-        })
-        .select()
-        .single();
-      if (orderError) throw orderError;
-      const orderItemsToInsert = newOrder.items.map(item => ({
-        order_id: order.id,
-        product_id: item.product_id,
-        quantity: item.quantity,
-        price: products.find(p => p.id === item.product_id)?.price || 0
-      }));
-      const { error: itemsError } = await supabase
-        .from('order_items')
-        .insert(orderItemsToInsert);
-      if (itemsError) throw itemsError;
-      for (const item of newOrder.items) {
-        const product = products.find(p => p.id === item.product_id);
-        if (product) {
-          const newQuantity = product.quantity - item.quantity;
-          // Update product quantity in products table
-          const { error: updateProductError } = await supabase
-            .from('products')
-            .update({ quantity: newQuantity })
-            .eq('id', item.product_id)
-            .eq('user_id', userId);
-          if (updateProductError) console.error(`Error updating product quantity for ${product.name}:`, updateProductError);
-          // Log inventory change (delete)
-          await supabase
-            .from('inventory_log')
-            .insert({
-              product_id: item.product_id,
-              user_id: userId,
-              change_type: 'delete',
-              quantity: item.quantity,
-              timestamp: new Date().toISOString()
-            });
-          // Update inventory table
-          await supabase
-            .from('inventory')
-            .upsert({
-              product_id: item.product_id,
-              user_id: userId,
-              quantity: newQuantity
-            });
-        }
-      }
-      displayMessage('Order created successfully!', 'success');
-      setNewOrder({
-        customer_name: '',
-        customer_contact: '',
-        items: [{ product_id: '', quantity: 1 }]
-      });
-      setShowForm(false);
-      fetchOrders();
-      fetchProducts();
-    } catch (error) {
-      console.error('Error creating order:', error);
-      displayMessage('Error creating order: ' + error.message, 'error');
-    }
-    setLoading(false);
-  };
-
+  const logInventoryChange = async (productId, changeType, quantity, productName, productSku) => {
+    console.log(`[logInventoryChange] Attempting to log inventory change for product ${productName} (SKU: ${productSku})...`);
+    const { error } = await supabase
+      .from('inventory_logs')
+      .insert({
+        product_id: productId,
+        user_id: userId,
+        change_type: changeType,
+        quantity_changed: quantity,
+        product_name: productName,
+        SKU: productSku
+      });
+    if (error) {
+      console.error('[logInventoryChange] Error logging inventory change:', error);
+      displayMessage('Failed to log inventory change: ' + error.message, 'error');
+      return false;
+    }
+    console.log('[logInventoryChange] Inventory change logged successfully.');
+    return true;
+  };
 
   const createOrder = async () => {
     if (!newOrder.customer_name || newOrder.items.some(item => !item.product_id || item.quantity <= 0)) {
