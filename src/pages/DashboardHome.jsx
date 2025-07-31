@@ -45,10 +45,23 @@ const DashboardHome = () => {
       setLoading(true);
       setError(null);
 
-      // Fetch products data
+      // Get current user session
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+
+      // Fetch products data for the current user
       const { data: products, error: productsError } = await supabase
         .from('products')
-        .select('id, name, quantity, price, low_stock_threshold');
+        .select('id, name, quantity, price, low_stock_threshold, user_id')
+        .eq('user_id', userId);
+
+      if (productsError) {
+        throw productsError;
+      }
+
+        .from('products')
+        .select('id, name, quantity, price, low_stock_threshold, user_id')
+        .eq('user_id', userId);
 
       if (productsError) {
         throw productsError;
@@ -64,7 +77,9 @@ const DashboardHome = () => {
       const { data: orders, error: ordersError } = await supabase
         .from('orders')
         .select('id, status, created_at')
+        .eq('user_id', userId)
         .order('created_at', { ascending: false });
+
 
       if (ordersError) {
         throw ordersError;

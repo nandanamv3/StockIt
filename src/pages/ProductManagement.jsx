@@ -33,17 +33,17 @@ function Products() {
   // Fetch products
   useEffect(() => {
     async function fetchProducts() {
+      if (!user?.id) return;
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, sku, quantity, price, category, image_url, low_stock_threshold, created_at');
-
+        .select('id, name, sku, quantity, price, category, image_url, low_stock_threshold, created_at, user_id')
+        .eq('user_id', user.id);
       if (error) {
         setError(error.message);
       } else {
         setProducts(data);
       }
     }
-
     fetchProducts();
   }, []);
 
@@ -177,6 +177,7 @@ function Products() {
         );
       } else {
         // 3. Add new product with user ID
+               // 3. Add new product with user ID
         const { data, error: insertError } = await supabase
           .from('products')
           .insert([{
@@ -187,7 +188,7 @@ function Products() {
             category: category || null,
             image_url: imageUrl,
             low_stock_threshold: parsedThreshold,
-            user_id: user.id, // <-- FIX IS HERE
+            user_id: user.id,
           }])
           .select();
 
@@ -196,10 +197,31 @@ function Products() {
         }
 
         if (parsedQuantity > 0) {
-          await logInventoryChange(data[0].id, 'add', parsedQuantity, name, sku);
+          // Log inventory change
+          await supabase
+            .from('inventory_logs')
+            .insert({
+              product_id: data[0].id,
+              user_id: user.id,
+              change_type: 'add',
+              quantity_changed: parsedQuantity,
+              SKU: sku || '',
+              product_name: name,
+            });
+
+          // Update inventory table
+          await supabase
+            .from('inventory')
+            .upsert({
+              product_id: data[0].id,
+              user_id: user.id,
+              quantity: parsedQuantity,
+            });
         }
 
         setProducts((prev) => [...prev, data[0]]);
+        resetForm();
+        setShowForm(false);
       }
 
       resetForm();
