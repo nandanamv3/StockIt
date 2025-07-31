@@ -1,9 +1,14 @@
-import React from 'react'
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import Dashboard from './pages/Dashboard';
+import DashboardHome from './pages/DashboardHome';
+import ProductManagement from './pages/ProductManagement';
+import OrderManagement from './pages/OrderManagement';
+import InventoryLog from './pages/InventoryLog';
 
-import Dashboard from './pages/Dashboard'
-import LoginPage from './pages/LoginPage'
-import RegisterPage from './pages/RegisterPage'
+
+import React from 'react'
 
 function App() {
   return (
@@ -12,10 +17,15 @@ function App() {
         <Route path="/" element={<LoginPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
-        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/dashboard" element={<Dashboard />}>
+          <Route index element={<DashboardHome />} />
+          <Route path="products" element={<ProductManagement />} />
+          <Route path="orders" element={<OrderManagement />} />
+          <Route path="inventory" element={<InventoryLog />} />
+        </Route>
       </Routes>
     </Router>
-  )
+  );
 }
 
 export default App
