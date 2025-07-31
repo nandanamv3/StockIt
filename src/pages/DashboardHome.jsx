@@ -1,10 +1,335 @@
-import React from 'react';
+// This will be the new file: pages/DashboardHome.jsx
+import React, { useState, useEffect } from 'react';
+import supabase from '../lib/supabase';
+import {
+  DollarSign,
+  Package,
+  ShoppingCart,
+  AlertTriangle,
+  TrendingUp,
+  Users,
+  Eye,
+} from 'lucide-react';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
 
-export default function DashboardHome() {
+const DashboardHome = () => {
+  const [stats, setStats] = useState({
+    totalSales: 0,
+    totalOrders: 0,
+    totalProducts: 0,
+    lowStockItems: 0,
+    pendingOrders: 0,
+  });
+  const [topProducts, setTopProducts] = useState([]);
+  const [salesData, setSalesData] = useState([]);
+  const [lowStockProducts, setLowStockProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showLowStockDetails, setShowLowStockDetails] = useState(false);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      // Your existing data fetching logic goes here
+      const { data: products } = await supabase
+        .from('products')
+        .select('id, name, quantity, price, low_stock_threshold');
+
+      const totalProducts = products?.length || 0;
+      const lowStockItems =
+        products?.filter(
+          (p) => (p.quantity ?? 0) <= (p.low_stock_threshold ?? 5)
+        ).length || 0;
+
+      const { data: orders } = await supabase
+        .from('orders')
+        .select('id, status, total_amount, created_at');
+
+      const totalOrders = orders?.length || 0;
+      const pendingOrders =
+        orders?.filter((o) => o.status === 'pending').length || 0;
+      const completedOrders = orders?.filter(
+        (o) => o.status === 'completed'
+      ) || [];
+      const totalSales = completedOrders.reduce(
+        (sum, order) => sum + (order.total_amount || 0),
+        0
+      );
+
+      const salesByDay = generateSalesData(completedOrders);
+
+      const sortedProducts = [...(products || [])]
+        .sort((a, b) => (b.quantity ?? 0) - (a.quantity ?? 0))
+        .slice(0, 4)
+        .map((p) => ({
+          name: p.name,
+          sales: p.quantity ?? 0,
+          revenue: (p.price ?? 0) * (p.quantity ?? 0),
+        }));
+
+      const lowStockProductsArr =
+        products?.filter(
+          (p) => (p.quantity ?? 0) <= (p.low_stock_threshold ?? 5)
+        ) || [];
+
+      setStats({
+        totalSales,
+        totalOrders,
+        totalProducts,
+        lowStockItems,
+        pendingOrders,
+      });
+      setTopProducts(sortedProducts);
+      setSalesData(salesByDay);
+      setLowStockProducts(lowStockProductsArr);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      setLoading(false);
+    }
+  };
+
+  const generateSalesData = (orders) => {
+    const last7Days = [];
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+
+      const dayOrders = orders.filter((order) =>
+        order.created_at?.startsWith(dateStr)
+      );
+
+      const totalSales = dayOrders.reduce(
+        (sum, order) => sum + (order.total_amount || 0),
+        0
+      );
+
+      last7Days.push({
+        day: date.toLocaleDateString('en-US', { weekday: 'short' }),
+        sales: totalSales,
+        orders: dayOrders.length,
+      });
+    }
+    return last7Days;
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  const statCards = [
+    {
+      title: 'Total Sales',
+      value: `₹${stats.totalSales.toLocaleString('en-IN')}`,
+      icon: DollarSign,
+      color: 'text-green-600',
+      bgColor: 'bg-green-50',
+      change: '+12.5%',
+    },
+    {
+      title: 'Total Orders',
+      value: stats.totalOrders.toString(),
+      icon: ShoppingCart,
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-50',
+      change: '+8.2%',
+    },
+    {
+      title: 'Products',
+      value: stats.totalProducts.toString(),
+      icon: Package,
+      color: 'text-purple-600',
+      bgColor: 'bg-purple-50',
+      change: '+2.1%',
+    },
+    {
+      title: 'Low Stock Items',
+      value: stats.lowStockItems.toString(),
+      icon: AlertTriangle,
+      color: 'text-red-600',
+      bgColor: 'bg-red-50',
+      urgent: stats.lowStockItems > 0,
+      onClick: () => setShowLowStockDetails((prev) => !prev),
+    },
+  ];
+
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold mb-4">Dashboard</h1>
-      <p>Welcome to your inventory management dashboard. Use the sidebar to navigate.</p>
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+        <p className="text-gray-600 mt-2">Welcome back!</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        {statCards.map((card, index) => {
+          const Icon = card.icon;
+          return (
+            <div
+              key={index}
+              className={`bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow duration-200 ${
+                card.title === 'Low Stock Items' ? 'cursor-pointer' : ''
+              }`}
+              onClick={card.onClick ? card.onClick : undefined}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 mb-1">
+                    {card.title}
+                  </p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {card.value}
+                  </p>
+                  {card.change && (
+                    <p className="text-sm text-green-600 mt-1 flex items-center">
+                      <TrendingUp className="h-3 w-3 mr-1" />
+                      {card.change}
+                    </p>
+                  )}
+                  {card.urgent && (
+                    <p className="text-sm text-red-600 mt-1 font-medium">
+                      Needs attention
+                    </p>
+                  )}
+                </div>
+                <div className={`${card.bgColor} p-3 rounded-lg`}>
+                  <Icon className={`h-6 w-6 ${card.color}`} />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {showLowStockDetails && lowStockProducts.length > 0 && (
+        <div className="mb-8">
+          <h3 className="text-lg font-semibold text-red-600 mb-4">
+            Low Stock Products
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {lowStockProducts.map((product) => (
+              <div
+                key={product.id}
+                className="bg-white border border-red-200 rounded-lg shadow-sm p-4 hover:shadow-md transition-shadow duration-200"
+              >
+                <h4 className="font-semibold text-gray-900">
+                  {product.name}
+                </h4>
+                <p className="text-sm text-gray-600">
+                  Quantity Left: {product.quantity}
+                </p>
+                <p className="text-sm text-gray-600">
+                  Price: ₹{product.price?.toLocaleString('en-IN') || 0}
+                </p>
+                <p className="text-xs text-red-500 mt-2">
+                  Low stock threshold: {product.low_stock_threshold}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-semibold text-gray-900">
+              Sales Overview
+            </h3>
+            <div className="flex items-center text-sm text-gray-600">
+              <Eye className="h-4 w-4 mr-1" />
+              Last 7 days
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart data={salesData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="day" />
+              <YAxis />
+              <Tooltip
+                formatter={(value) => [
+                  `₹${value.toLocaleString('en-IN')}`,
+                  'Sales',
+                ]}
+                labelFormatter={(label) => `Day: ${label}`}
+              />
+              <Bar dataKey="sales" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-6">
+            Products in Stock
+          </h3>
+          <div className="space-y-4">
+            {topProducts.map((product, index) => (
+              <div
+                key={index}
+                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+              >
+                <div className="flex items-center">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                    <span className="text-blue-600 font-semibold text-sm">
+                      {index + 1}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">
+                      {product.name}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      {product.sales} units sold
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="font-semibold text-gray-900">
+                    ₹{product.revenue.toLocaleString('en-IN')}
+                  </p>
+                  <p className="text-sm text-gray-600">Revenue</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          Quick Actions
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <button className="flex items-center justify-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200">
+            <Package className="h-5 w-5 mr-2 text-blue-600" />
+            <span className="font-medium">Add New Product</span>
+          </button>
+          <button className="flex items-center justify-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200">
+            <ShoppingCart className="h-5 w-5 mr-2 text-green-600" />
+            <span className="font-medium">Create Order</span>
+          </button>
+          <button className="flex items-center justify-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200">
+            <Users className="h-5 w-5 mr-2 text-purple-600" />
+            <span className="font-medium">View Reports</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
-}
+};
+
+export default DashboardHome;
