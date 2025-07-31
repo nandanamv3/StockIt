@@ -29,21 +29,23 @@ function Products() {
     getUserData();
   }, []);
 
-  useEffect(() => {
-    async function fetchProducts() {
-      const { data, error } = await supabase
-        .from('products')
-        .select('id, name, sku, quantity, price, category, image_url, low_stock_threshold, created_at');
 
-      if (error) {
-        setError(error.message);
-      } else {
-        setProducts(data);
-      }
+  // Fetch products
+useEffect(() => {
+  async function fetchProducts() {
+    if (!user?.id) return;
+    const { data, error } = await supabase
+      .from('products')
+      .select('id, name, sku, quantity, price, category, image_url, low_stock_threshold, created_at, user_id')
+      .eq('user_id', user.id);
+    if (error) {
+      setError(error.message);
+    } else {
+      setProducts(data);
     }
-
-    fetchProducts();
-  }, []);
+  }
+  fetchProducts();
+}, [user]);
 
   const handleInputChange = (e) => {
     const { name, value, files } = e.target;
@@ -168,6 +170,10 @@ function Products() {
           prev.map((p) => (p.id === id ? { ...p, name, sku, quantity: parsedQuantity, price: parsedPrice, category, image_url: imageUrl || currentProduct.image_url, low_stock_threshold: parsedThreshold } : p))
         );
       } else {
+
+        // 3. Add new product with user ID
+              
+
         const { data, error: insertError } = await supabase
           .from('products')
           .insert([{
@@ -187,10 +193,31 @@ function Products() {
         }
 
         if (parsedQuantity > 0) {
-          await logInventoryChange(data[0].id, 'add', parsedQuantity, name, sku);
+          // Log inventory change
+          await supabase
+            .from('inventory_logs')
+            .insert({
+              product_id: data[0].id,
+              user_id: user.id,
+              change_type: 'add',
+              quantity_changed: parsedQuantity,
+              SKU: sku || '',
+              product_name: name,
+            });
+
+          // Update inventory table
+          await supabase
+            .from('inventory')
+            .upsert({
+              product_id: data[0].id,
+              user_id: user.id,
+              quantity: parsedQuantity,
+            });
         }
 
         setProducts((prev) => [...prev, data[0]]);
+        resetForm();
+        setShowForm(false);
       }
 
       resetForm();

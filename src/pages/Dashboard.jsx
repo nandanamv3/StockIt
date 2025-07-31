@@ -8,7 +8,7 @@ const Dashboard = () => {
   return (
     <div className="flex min-h-screen bg-gray-50">
       {/* Sidebar */}
-      <aside className="w-64 hidden md:block">
+      <aside className="w-64 hidden md:block min-h-screen">
         <Sidebar />
       </aside>
 
