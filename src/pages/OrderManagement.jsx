@@ -1,3 +1,4 @@
+/* eslint-disable no-irregular-whitespace */
 import React, { useState, useEffect } from 'react';
 import supabase from '../lib/supabase';
 
@@ -69,7 +70,7 @@ const OrderManagement = () => {
           *,
           order_items (
             *,
-            products (id, name, price, sku)
+            products (id, name, price, quantity, sku)
           )
         `)
         .eq('user_id', userId)
@@ -226,24 +227,40 @@ const OrderManagement = () => {
         console.log(`[updateOrderStatus] Order status updated successfully.`);
       }
 
-      if (newStatus === 'completed' && oldStatus === 'pending') {
+      if (newStatus === 'completed') {
+        // Inventory changes only when an order is completed.
         if (orderToUpdate.order_items) {
           for (const item of orderToUpdate.order_items) {
+            // Log the inventory removal
             await logInventoryChange(item.product_id, 'remove', item.quantity, item.products?.name, item.products?.sku);
+            const productInState = products.find(p => p.id === item.product_id);
+            if (productInState) {
+              // Update the product quantity in the database
+              const newQuantity = productInState.quantity - item.quantity;
+              const { error: updateProductError } = await supabase
+                .from('products')
+                .update({ quantity: newQuantity })
+                .eq('id', item.product_id)
+                .eq('user_id', userId);
+              if (updateProductError) {
+                console.error('[updateOrderStatus] Error updating product quantity:', updateProductError);
+                displayMessage('Product update failed: ' + updateProductError.message, 'error');
+              }
+            }
           }
         }
-      } else if (newStatus === 'cancelled' && oldStatus !== 'cancelled') {
+      } else if (newStatus === 'cancelled' && oldStatus === 'completed') {
+        // When a completed order is cancelled, return the items to stock
         if (orderToUpdate.order_items) {
           for (const item of orderToUpdate.order_items) {
+            // Log the inventory addition
             await logInventoryChange(item.product_id, 'add', item.quantity, item.products?.name, item.products?.sku);
             
             const productInState = products.find(p => p.id === item.product_id);
             if (productInState) {
+              // Update the product quantity in the database
               const newQuantity = productInState.quantity + item.quantity;
               console.log(`[updateOrderStatus] Attempting to update product quantity for ${productInState.name} on cancellation...`);
-              console.log(`[updateOrderStatus] Update payload: { quantity: ${newQuantity} }`);
-              console.log(`[updateOrderStatus] Filters: { id: ${item.product_id}, user_id: ${userId} }`);
-
               const { data, error: updateProductError } = await supabase
                 .from('products')
                 .update({ quantity: newQuantity })
@@ -257,7 +274,7 @@ const OrderManagement = () => {
               } else if (data && data.length > 0) {
                 console.log(`[updateOrderStatus] SUCCESS: Product ${productInState.name} quantity updated in DB.`);
               } else {
-                console.warn(`[updateOrderStatus] WARNING: Product update query affected 0 rows. Check filters again.`);
+                console.warn(`[updateOrderStatus] WARNING: Update query for product ${item.product_id} affected 0 rows.`);
               }
             }
           }
@@ -266,6 +283,7 @@ const OrderManagement = () => {
 
       displayMessage('Order status updated successfully!', 'success');
       fetchOrders();
+      fetchProducts(); 
     } catch (error) {
       console.error('Error updating status:', error);
       displayMessage('Error updating status: ' + error.message, 'error');
@@ -403,178 +421,178 @@ const OrderManagement = () => {
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-search text-gray-500">
               <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
             </svg>
+        </div>
+    </div>
+    <div className="bg-white rounded-lg shadow overflow-hidden border border-gray-200">
+      <table className="w-full divide-y divide-gray-200">
+        <thead className="bg-gray-50">
+          <tr>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order ID</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User ID</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+          </tr>
+        </thead>
+        <tbody className="bg-white divide-y divide-gray-200">
+          {filteredOrders.map((order) => (
+            <tr key={order.id} className="hover:bg-gray-50">
+              <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">#{order.id}</td>
+              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">{order.customer_name}</td>
+              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">{order.customer_contact}</td>
+              <td className="px-4 py-3 text-sm text-gray-700">
+                {order.order_items && order.order_items.length > 0 ? (
+                  <ul className="list-disc list-inside">
+                    {order.order_items.map((item, idx) => (
+                      <li key={idx}>
+                        {item.products?.name || 'Unknown Product'} (x{item.quantity})
+                      </li>
+                    ))}
+                  </ul>
+                ) : 'No items'}
+              </td>
+              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                ₹{getOrderTotal(order.order_items || []).toFixed(2)}
+              </td>
+              <td className="px-4 py-3 whitespace-nowrap text-sm">
+                <select
+                  value={order.status}
+                  onChange={(e) => updateOrderStatus(order.id, e.target.value)}
+                  className="px-2 py-1 border border-gray-300 rounded-md text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="pending">pending</option>
+                  <option value="completed">completed</option>
+                  <option value="cancelled">cancelled</option>
+                </select>
+              </td>
+              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 break-all">{order.user_id}</td>
+              <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                <button
+                  onClick={() => deleteOrder(order.id)}
+                  className="text-red-600 hover:text-red-900 focus:outline-none"
+                >
+                  Delete
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {filteredOrders.length === 0 && !loading && (
+        <div className="text-center py-8 text-gray-500 text-lg">
+          No orders found
+        </div>
+      )}
+      {loading && (
+        <div className="text-center py-8 text-blue-600 text-lg">
+          Loading orders...
+        </div>
+      )}
+    </div>
+    {showForm && (
+      <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50 p-4">
+        <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <h2 className="text-2xl font-bold mb-4 text-gray-800">Create New Order</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-gray-700 text-sm font-bold mb-2">Customer Name <span className="text-red-500">*</span></label>
+              <input
+                type="text"
+                placeholder="Customer Name"
+                className="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:ring-2 focus:ring-blue-500"
+                value={newOrder.customer_name}
+                onChange={(e) => setNewOrder({...newOrder, customer_name: e.target.value})}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 text-sm font-bold mb-2">Customer Contact</label>
+              <input
+                type="text"
+                placeholder="Customer Contact"
+                className="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:ring-2 focus:ring-blue-500"
+                value={newOrder.customer_contact}
+                onChange={(e) => setNewOrder({...newOrder, customer_contact: e.target.value})}
+              />
+            </div>
           </div>
-        </div>
-        <div className="bg-white rounded-lg shadow overflow-hidden border border-gray-200">
-          <table className="w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order ID</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User ID</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredOrders.map((order) => (
-                <tr key={order.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">#{order.id}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">{order.customer_name}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">{order.customer_contact}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700">
-                    {order.order_items && order.order_items.length > 0 ? (
-                      <ul className="list-disc list-inside">
-                        {order.order_items.map((item, idx) => (
-                          <li key={idx}>
-                            {item.products?.name || 'Unknown Product'} (x{item.quantity})
-                          </li>
-                        ))}
-                      </ul>
-                    ) : 'No items'}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
-                    ₹{getOrderTotal(order.order_items || []).toFixed(2)}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm">
-                    <select
-                      value={order.status}
-                      onChange={(e) => updateOrderStatus(order.id, e.target.value)}
-                      className="px-2 py-1 border border-gray-300 rounded-md text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="pending">pending</option>
-                      <option value="completed">completed</option>
-                      <option value="cancelled">cancelled</option>
-                    </select>
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 break-all">{order.user_id}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
-                    <button
-                      onClick={() => deleteOrder(order.id)}
-                      className="text-red-600 hover:text-red-900 focus:outline-none"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {filteredOrders.length === 0 && !loading && (
-            <div className="text-center py-8 text-gray-500 text-lg">
-              No orders found
-            </div>
-          )}
-          {loading && (
-            <div className="text-center py-8 text-blue-600 text-lg">
-              Loading orders...
-            </div>
-          )}
-        </div>
-        {showForm && (
-          <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50 p-4">
-            <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-              <h2 className="text-2xl font-bold mb-4 text-gray-800">Create New Order</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="block text-gray-700 text-sm font-bold mb-2">Customer Name <span className="text-red-500">*</span></label>
+          <div className="mb-4">
+            <div className="flex justify-between items-center mb-2">
+              <label className="font-bold text-gray-800">Order Items</label>
+              <button
+                type="button"
+                onClick={addOrderItem}
+                className="text-blue-600 hover:text-blue-800 text-sm font-semibold transition duration-200"
+              >
+                + Add Item
+              </button>
+          </div>
+          {newOrder.items.map((item, index) => (
+            <div key={index} className="flex flex-col sm:flex-row gap-2 mb-3 items-end p-3 border border-gray-200 rounded-lg bg-gray-50">
+              <div className="flex-1 w-full">
+                <label className="block text-gray-700 text-xs font-bold mb-1">Product <span className="text-red-500">*</span></label>
+                <select
+                  className="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:ring-2 focus:ring-blue-500"
+                  value={item.product_id}
+                  onChange={(e) => updateOrderItem(index, 'product_id', e.target.value)}
+                  required
+                >
+                  <option value="">Select Product</option>
+                  {products.map(product => (
+                    <option key={product.id} value={product.id} disabled={product.quantity <= 0}>
+                      {product.name} (SKU: {product.sku}) - ₹{product.price?.toFixed(2)} (Available: {product.quantity})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="w-full sm:w-auto">
+                  <label className="block text-gray-700 text-xs font-bold mb-1">Quantity <span className="text-red-500">*</span></label>
                   <input
-                    type="text"
-                    placeholder="Customer Name"
-                    className="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:ring-2 focus:ring-blue-500"
-                    value={newOrder.customer_name}
-                    onChange={(e) => setNewOrder({...newOrder, customer_name: e.target.value})}
+                    type="number"
+                    min="1"
+                    className="shadow appearance-none border rounded-lg w-full sm:w-24 py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:ring-2 focus:ring-blue-500"
+                    value={item.quantity}
+                    onChange={(e) => updateOrderItem(index, 'quantity', parseInt(e.target.value) || 1)}
                     required
                   />
-                </div>
-                <div>
-                  <label className="block text-gray-700 text-sm font-bold mb-2">Customer Contact</label>
-                  <input
-                    type="text"
-                    placeholder="Customer Contact"
-                    className="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:ring-2 focus:ring-blue-500"
-                    value={newOrder.customer_contact}
-                    onChange={(e) => setNewOrder({...newOrder, customer_contact: e.target.value})}
-                  />
-                </div>
-              </div>
-              <div className="mb-4">
-                <div className="flex justify-between items-center mb-2">
-                  <label className="font-bold text-gray-800">Order Items</label>
-                  <button
-                    type="button"
-                    onClick={addOrderItem}
-                    className="text-blue-600 hover:text-blue-800 text-sm font-semibold transition duration-200"
-                  >
-                    + Add Item
-                  </button>
-                </div>
-                {newOrder.items.map((item, index) => (
-                  <div key={index} className="flex flex-col sm:flex-row gap-2 mb-3 items-end p-3 border border-gray-200 rounded-lg bg-gray-50">
-                    <div className="flex-1 w-full">
-                      <label className="block text-gray-700 text-xs font-bold mb-1">Product <span className="text-red-500">*</span></label>
-                      <select
-                        className="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:ring-2 focus:ring-blue-500"
-                        value={item.product_id}
-                        onChange={(e) => updateOrderItem(index, 'product_id', e.target.value)}
-                        required
-                      >
-                        <option value="">Select Product</option>
-                        {products.map(product => (
-                          <option key={product.id} value={product.id} disabled={product.quantity <= 0}>
-                            {product.name} (SKU: {product.sku}) - ₹{product.price?.toFixed(2)} (Available: {product.quantity})
-                          </option>
-                        ))}
-                      </select>
-                  </div>
-                  <div className="w-full sm:w-auto">
-                      <label className="block text-gray-700 text-xs font-bold mb-1">Quantity <span className="text-red-500">*</span></label>
-                      <input
-                        type="number"
-                        min="1"
-                        className="shadow appearance-none border rounded-lg w-full sm:w-24 py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:ring-2 focus:ring-blue-500"
-                        value={item.quantity}
-                        onChange={(e) => updateOrderItem(index, 'quantity', parseInt(e.target.value) || 1)}
-                        required
-                      />
-                  </div>
-                  {newOrder.items.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeOrderItem(index)}
-                        className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:shadow-outline transition duration-200 mt-2 sm:mt-0"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={() => setShowForm(false)}
-                  className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-6 rounded-lg focus:outline-none focus:shadow-outline transition duration-200"
-                  disabled={loading}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={createOrder}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg focus:outline-none focus:shadow-outline transition duration-200"
-                  disabled={loading}
-                >
-                  {loading ? 'Creating...' : 'Create Order'}
-                </button>
-              </div>
             </div>
+            {newOrder.items.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => removeOrderItem(index)}
+                  className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:shadow-outline transition duration-200 mt-2 sm:mt-0"
+                >
+                  Remove
+                </button>
+              )}
           </div>
-        )}
+        ))}
+      </div>
+      <div className="flex justify-end gap-3">
+        <button
+          onClick={() => setShowForm(false)}
+          className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-6 rounded-lg focus:outline-none focus:shadow-outline transition duration-200"
+          disabled={loading}
+        >
+          Cancel
+        </button>
+        <button
+          onClick={createOrder}
+          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg focus:outline-none focus:shadow-outline transition duration-200"
+          disabled={loading}
+        >
+          {loading ? 'Creating...' : 'Create Order'}
+        </button>
       </div>
     </div>
-  );
+  </div>
+  )}
+</div>
+</div>
+);
 };
 
 export default OrderManagement;
