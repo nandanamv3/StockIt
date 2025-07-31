@@ -41,17 +41,17 @@ function Products() {
     if (!user) return;
 
     async function fetchProducts() {
+      if (!user?.id) return;
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, sku, quantity, price, category, image_url, low_stock_threshold, created_at');
-
+        .select('id, name, sku, quantity, price, category, image_url, low_stock_threshold, created_at, user_id')
+        .eq('user_id', user.id);
       if (error) {
         setError(error.message);
       } else {
         setProducts(data);
       }
     }
-
     fetchProducts();
   }, [user]);
 
@@ -118,6 +118,24 @@ function Products() {
         setError(error.message);
       } else {
         setProducts((prev) => [...prev, data[0]]);
+        // Log inventory change (add)
+        await supabase
+          .from('inventory_log')
+          .insert({
+            product_id: data[0].id,
+            user_id: user.id,
+            change_type: 'add',
+            quantity: parseInt(quantity),
+            timestamp: new Date().toISOString()
+          });
+        // Update inventory table
+        await supabase
+          .from('inventory')
+          .upsert({
+            product_id: data[0].id,
+            user_id: user.id,
+            quantity: parseInt(quantity)
+          });
         resetForm();
         setShowForm(false);
       }

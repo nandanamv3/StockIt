@@ -41,9 +41,12 @@ const DashboardHome = () => {
   const fetchDashboardData = async () => {
     try {
       // Your existing data fetching logic goes here
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
       const { data: products } = await supabase
         .from('products')
-        .select('id, name, quantity, price, low_stock_threshold');
+        .select('id, name, quantity, price, low_stock_threshold, user_id')
+        .eq('user_id', userId);
 
       const totalProducts = products?.length || 0;
       const lowStockItems =
@@ -53,7 +56,8 @@ const DashboardHome = () => {
 
       const { data: orders } = await supabase
         .from('orders')
-        .select('id, status, total_amount, created_at');
+        .select('id, status, total_amount, created_at, user_id')
+        .eq('user_id', userId);
 
       const totalOrders = orders?.length || 0;
       const pendingOrders =

@@ -10,6 +10,7 @@ const OrderManagement = () => {
   const [message, setMessage] = useState(null);
   const [messageType, setMessageType] = useState('');
   const [userId, setUserId] = useState(null);
+  const [user, setUser] = useState(null);
   const [newOrder, setNewOrder] = useState({
     customer_name: '',
     customer_contact: '',
@@ -26,15 +27,27 @@ const OrderManagement = () => {
     }
   }, [message]);
 
+  // Get logged-in user from Supabase
   useEffect(() => {
-    const fixedUserId = '0415b17a-6d32-444f-88e7-dea963777b2a';
-    setUserId(fixedUserId);
+    async function getSession() {
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user ?? null);
+      setUserId(session?.user?.id ?? null);
+    }
+    getSession();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      setUserId(session?.user?.id ?? null);
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
     if (userId) {
       fetchOrders();
       fetchProducts();
+    } else {
+      setOrders([]);
     }
   }, [userId]);
 
@@ -45,6 +58,11 @@ const OrderManagement = () => {
 
   const fetchOrders = async () => {
     setLoading(true);
+    if (!userId) {
+      setOrders([]);
+      setLoading(false);
+      return;
+    }
     try {
       const { data, error } = await supabase
         .from('orders')
@@ -68,9 +86,14 @@ const OrderManagement = () => {
 
   const fetchProducts = async () => {
     try {
+      if (!userId) {
+        setProducts([]);
+        return;
+      }
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, price, quantity')
+        .select('id, name, price, quantity, user_id')
+        .eq('user_id', userId)
         .gt('quantity', 0);
       if (error) throw error;
       setProducts(data || []);
@@ -113,12 +136,31 @@ const OrderManagement = () => {
         const product = products.find(p => p.id === item.product_id);
         if (product) {
           const newQuantity = product.quantity - item.quantity;
+          // Update product quantity in products table
           const { error: updateProductError } = await supabase
             .from('products')
             .update({ quantity: newQuantity })
             .eq('id', item.product_id)
             .eq('user_id', userId);
           if (updateProductError) console.error(`Error updating product quantity for ${product.name}:`, updateProductError);
+          // Log inventory change (delete)
+          await supabase
+            .from('inventory_log')
+            .insert({
+              product_id: item.product_id,
+              user_id: userId,
+              change_type: 'delete',
+              quantity: item.quantity,
+              timestamp: new Date().toISOString()
+            });
+          // Update inventory table
+          await supabase
+            .from('inventory')
+            .upsert({
+              product_id: item.product_id,
+              user_id: userId,
+              quantity: newQuantity
+            });
         }
       }
       displayMessage('Order created successfully!', 'success');
