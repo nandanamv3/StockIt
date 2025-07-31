@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import supabase from '../lib/supabase';
-import { Plus, Search, Edit, Trash2, Package, AlertTriangle, ArrowLeft, Save } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Package, AlertTriangle, ArrowLeft, Save, Upload } from 'lucide-react';
 
 function Products() {
   const [products, setProducts] = useState([]);
@@ -13,7 +13,7 @@ function Products() {
     quantity: '',
     price: '',
     category: '',
-    image_url: '',
+    image_file: null,
     low_stock_threshold: 5,
   });
   const [isEditing, setIsEditing] = useState(false);
@@ -21,110 +21,212 @@ function Products() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
 
-  // Check authentication status
   useEffect(() => {
-    async function getSession() {
-      const { data: { session } } = await supabase.auth.getSession();
-      setUser(session?.user ?? null);
+    async function getUserData() {
+        const { data: { user } } = await supabase.auth.getUser();
+        setUser(user);
     }
-    getSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-
-    return () => subscription.unsubscribe();
+    getUserData();
   }, []);
 
-  // Fetch products (only if authenticated)
-  useEffect(() => {
-    if (!user) return;
 
-    async function fetchProducts() {
-      const { data, error } = await supabase
-        .from('products')
-        .select('id, name, sku, quantity, price, category, image_url, low_stock_threshold, created_at');
-
-      if (error) {
-        setError(error.message);
-      } else {
-        setProducts(data);
-      }
+  // Fetch products
+useEffect(() => {
+  async function fetchProducts() {
+    if (!user?.id) return;
+    const { data, error } = await supabase
+      .from('products')
+      .select('id, name, sku, quantity, price, category, image_url, low_stock_threshold, created_at, user_id')
+      .eq('user_id', user.id);
+    if (error) {
+      setError(error.message);
+    } else {
+      setProducts(data);
     }
+  }
+  fetchProducts();
+}, [user]);
 
-    fetchProducts();
-  }, [user]);
-
-  // Handle form input changes
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const { name, value, files } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: files ? files[0] : value,
+    }));
   };
 
-  // Handle form submission (add or update)
+  const logInventoryChange = async (productId, changeType, quantityChanged, productName, sku) => {
+    if (quantityChanged === 0) return;
+    const { error } = await supabase
+      .from('inventory_logs')
+      .insert([{
+        product_id: productId,
+        user_id: user?.id,
+        change_type: changeType,
+        quantity_changed: quantityChanged,
+        SKU: sku || '',
+        product_name: productName,
+      }]);
+
+    if (error) {
+      throw new Error(`Failed to log inventory change: ${error.message}`);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     if (!user) {
-      setError('You must be signed in to manage products.');
-      return;
+        setError("User not found. Please relogin and try again.");
+        return;
     }
 
-    const { id, name, sku, quantity, price, category, image_url, low_stock_threshold } = formData;
+    const { id, name, sku, quantity, price, category, image_file, low_stock_threshold } = formData;
 
     if (!name || !quantity || !price) {
       setError('Name, quantity, and price are required.');
       return;
     }
 
-    if (isEditing) {
-      const { error } = await supabase
-        .from('products')
-        .update({
-          name,
-          sku: sku || null,
-          quantity: parseInt(quantity),
-          price: parseFloat(price),
-          category: category || null,
-          image_url: image_url || null,
-          low_stock_threshold: parseInt(low_stock_threshold) || 5,
-        })
-        .eq('id', id);
+    const parsedQuantity = parseInt(quantity);
+    const parsedPrice = parseFloat(price);
+    const parsedThreshold = parseInt(low_stock_threshold) || 5;
 
-      if (error) {
-        setError(error.message);
-      } else {
-        setProducts((prev) =>
-          prev.map((p) => (p.id === id ? { ...p, name, sku, quantity, price, category, image_url, low_stock_threshold } : p))
-        );
-        resetForm();
-        setShowForm(false);
+    if (isNaN(parsedQuantity) || parsedQuantity < 0) {
+      setError('Quantity must be a non-negative number.');
+      return;
+    }
+    if (isNaN(parsedPrice) || parsedPrice <= 0) {
+      setError('Price must be a positive number.');
+      return;
+    }
+
+    let imageUrl = null;
+    if (image_file) {
+      const fileName = `${Date.now()}_${image_file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from('product-images')
+        .upload(`public/${fileName}`, image_file, {
+          contentType: image_file.type,
+          cacheControl: '3600',
+          upsert: false,
+        });
+
+      if (uploadError) {
+        setError(`Failed to upload image: ${uploadError.message}`);
+        return;
       }
-    } else {
-      const { data, error } = await supabase
-        .from('products')
-        .insert([{
-          name,
-          sku: sku || null,
-          quantity: parseInt(quantity),
-          price: parseFloat(price),
-          category: category || null,
-          image_url: image_url || null,
-          low_stock_threshold: parseInt(low_stock_threshold) || 5,
-          user_id: user.id,
-        }])
-        .select();
 
-      if (error) {
-        setError(error.message);
+      const { data: urlData } = supabase.storage
+        .from('product-images')
+        .getPublicUrl(`public/${fileName}`);
+
+      imageUrl = urlData.publicUrl;
+    }
+
+    try {
+      if (isEditing) {
+        const { data: currentProduct, error: fetchError } = await supabase
+          .from('products')
+          .select('quantity, name, sku, image_url')
+          .eq('id', id)
+          .single();
+
+        if (fetchError) {
+          throw new Error(fetchError.message);
+        }
+
+        if (image_file && currentProduct.image_url) {
+          const oldPath = currentProduct.image_url.split('/').slice(-2).join('/');
+          await supabase.storage
+            .from('product-images')
+            .remove([oldPath]);
+        }
+
+        const { error: updateError } = await supabase
+          .from('products')
+          .update({
+            name,
+            sku: sku || null,
+            quantity: parsedQuantity,
+            price: parsedPrice,
+            category: category || null,
+            image_url: imageUrl || currentProduct.image_url,
+            low_stock_threshold: parsedThreshold,
+          })
+          .eq('id', id);
+
+        if (updateError) {
+          throw new Error(updateError.message);
+        }
+
+        const quantityDiff = parsedQuantity - currentProduct.quantity;
+        if (quantityDiff !== 0) {
+          const changeType = quantityDiff > 0 ? 'add' : 'remove';
+          await logInventoryChange(id, changeType, Math.abs(quantityDiff), name, sku);
+        }
+
+        setProducts((prev) =>
+          prev.map((p) => (p.id === id ? { ...p, name, sku, quantity: parsedQuantity, price: parsedPrice, category, image_url: imageUrl || currentProduct.image_url, low_stock_threshold: parsedThreshold } : p))
+        );
       } else {
+
+        // 3. Add new product with user ID
+              
+
+        const { data, error: insertError } = await supabase
+          .from('products')
+          .insert([{
+            name,
+            sku: sku || null,
+            quantity: parsedQuantity,
+            price: parsedPrice,
+            category: category || null,
+            image_url: imageUrl,
+            low_stock_threshold: parsedThreshold,
+            user_id: user.id,
+          }])
+          .select();
+
+        if (insertError) {
+          throw new Error(insertError.message);
+        }
+
+        if (parsedQuantity > 0) {
+          // Log inventory change
+          await supabase
+            .from('inventory_logs')
+            .insert({
+              product_id: data[0].id,
+              user_id: user.id,
+              change_type: 'add',
+              quantity_changed: parsedQuantity,
+              SKU: sku || '',
+              product_name: name,
+            });
+
+          // Update inventory table
+          await supabase
+            .from('inventory')
+            .upsert({
+              product_id: data[0].id,
+              user_id: user.id,
+              quantity: parsedQuantity,
+            });
+        }
+
         setProducts((prev) => [...prev, data[0]]);
         resetForm();
         setShowForm(false);
       }
+
+      resetForm();
+      setShowForm(false);
+    } catch (err) {
+      setError(err.message);
     }
   };
 
-  // Handle edit button
   const handleEdit = (product) => {
     setFormData({
       id: product.id,
@@ -133,35 +235,49 @@ function Products() {
       quantity: product.quantity,
       price: product.price,
       category: product.category || '',
-      image_url: product.image_url || '',
+      image_file: null,
       low_stock_threshold: product.low_stock_threshold,
     });
     setIsEditing(true);
     setShowForm(true);
   };
 
-  // Handle delete button
   const handleDelete = async (id) => {
-    if (!user) {
-      setError('You must be signed in to manage products.');
-      return;
-    }
+    if (!window.confirm('Are you sure you want to delete this product? This will also remove its inventory logs.')) return;
 
-    if (!window.confirm('Are you sure you want to delete this product?')) return;
+    try {
+      const { data: product, error: fetchError } = await supabase
+        .from('products')
+        .select('image_url')
+        .eq('id', id)
+        .single();
 
-    const { error } = await supabase
-      .from('products')
-      .delete()
-      .eq('id', id);
+      if (fetchError) {
+        throw new Error(fetchError.message);
+      }
 
-    if (error) {
-      setError(error.message);
-    } else {
+      if (product.image_url) {
+        const path = product.image_url.split('/').slice(-2).join('/');
+        await supabase.storage
+          .from('product-images')
+          .remove([path]);
+      }
+
+      const { error } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
       setProducts((prev) => prev.filter((p) => p.id !== id));
+    } catch (err) {
+      setError(err.message);
     }
   };
 
-  // Reset form
   const resetForm = () => {
     setFormData({
       id: null,
@@ -170,31 +286,28 @@ function Products() {
       quantity: '',
       price: '',
       category: '',
-      image_url: '',
+      image_file: null,
       low_stock_threshold: 5,
     });
     setIsEditing(false);
     setError(null);
   };
 
-  // Toggle form visibility
   const toggleForm = () => {
     setShowForm(true);
     setIsEditing(false);
     resetForm();
   };
 
-  // Filter products
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (product.sku && product.sku.toLowerCase().includes(searchTerm.toLowerCase()));
+      (product.sku && product.sku.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesCategory = !selectedCategory || product.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
 
   const categories = [...new Set(products.map(p => p.category).filter(Boolean))];
 
-  // Render product management (only for authenticated users)
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -221,7 +334,6 @@ function Products() {
           </div>
         )}
 
-        {/* Filters */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="relative">
@@ -247,7 +359,6 @@ function Products() {
           </div>
         </div>
 
-        {/* Form for adding/editing products */}
         {showForm && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-8">
             <form onSubmit={handleSubmit} className="p-6 space-y-6">
@@ -291,7 +402,7 @@ function Products() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Price *</label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
                     <input
                       type="number"
                       name="price"
@@ -344,15 +455,20 @@ function Products() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Product Image URL</label>
-                <input
-                  type="url"
-                  name="image_url"
-                  value={formData.image_url}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="https://example.com/image.jpg"
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-2">Product Image</label>
+                <div className="flex items-center space-x-4">
+                  <input
+                    type="file"
+                    name="image_file"
+                    accept="image/*"
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {formData.image_file && (
+                    <span className="text-sm text-gray-600">{formData.image_file.name}</span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-600 mt-1">Upload an image file (max 5MB)</p>
               </div>
               <div className="flex justify-end space-x-4 pt-6">
                 <button
@@ -374,7 +490,6 @@ function Products() {
           </div>
         )}
 
-        {/* Products Grid */}
         {filteredProducts.length === 0 ? (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
             <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -418,7 +533,7 @@ function Products() {
                         )}
                       </div>
                       <div className="text-right">
-                        <p className="text-lg font-bold text-gray-900">${product.price.toFixed(2)}</p>
+                        <p className="text-lg font-bold text-gray-900">₹{product.price.toFixed(2)}</p>
                       </div>
                     </div>
                     <div className="flex items-center justify-between mb-4">
