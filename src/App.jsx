@@ -1,15 +1,15 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { Routes, Route } from 'react-router-dom';
+import Products from './pages/Products';
 
 function App() {
-
   return (
-    
-      <div>StockIt</div>
-
-  )
+    <div>
+      <Routes>
+        <Route path="/products" element={<Products />} />
+        <Route path="/" element={<h1>Welcome to Product Management</h1>} />
+      </Routes>
+    </div>
+  );
 }
 
-export default App
+export default App;
