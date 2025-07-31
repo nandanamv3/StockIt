@@ -8,6 +8,8 @@ import OrderManagement from './pages/OrderManagement';
 import InventoryLog from './pages/InventoryLog';
 
 
+import React from 'react'
+
 function App() {
   return (
     <Router>
