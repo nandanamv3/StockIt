@@ -1,29 +1,33 @@
-## Inventory and Order Management System for Small Businesses
+## Problem
 
-## Problem: Inventory and Order Management System for Small Businesses
-**Challenge Brief:** Design and build a web-based inventory and order management system tailored for small shop owners or vendors. The system should simplify tracking of stock levels, streamline order processing, and provide essential insights like low-stock alerts and daily sales summaries, helping businesses operate efficiently with minimal technical
+**Problem:** Inventory and Order Management System for Small Businesses
+**Challenge Brief:** Design and build a web-based inventory and order management system tailored for small shop owners or vendors. The system should simplify tracking of stock levels, streamline order processing, and provide essential insights like low-stock alerts and daily sales summaries, helping businesses operate efficiently with minimal technical.
 
-## Solution:** StockIt - Inventory Management System
+## Solution
+
+**Solution:** StockIt - Inventory Management System
 A full-stack inventory management solution built with React and Supabase. This system handles real-time inventory tracking, order processing, and business insights tailored for small and growing businesses.
 
-### Features:
-• Real-time Inventory: View and manage live stock levels with alerts for low stock.
-• User Authentication: Secure login for admin/shop owner(s).
-• Product Management: Add, edit, and remove products with ease.
-• Order Handling: Create and manage orders; auto-update inventory on order completion.
-• Sales Dashboard: Visualize total sales, top products on stock, low stock alerts and trends.
+## Features
 
-### Tech Stack
-• Frontend: React + Tailwind CSS
-• Backend: Supabase (Database, Auth, Realtime)
-• Charts: Recharts
+* Real-time Inventory: View and manage live stock levels with alerts for low stock.
+* User Authentication: Secure login for admin/shop owner(s).
+* Product Management: Add, edit, and remove products with ease.
+* Order Handling: Create and manage orders; auto-update inventory on order completion.
+* Sales Dashboard: Visualize total sales, top products on stock, low stock alerts and trends.
+
+## Tech Stack
+
+* Frontend: React + Tailwind CSS
+* Backend: Supabase (Database, Auth, Realtime)
+* Charts: Recharts
 
 ## Getting Started
 
 ### Prerequisites
 
-• Node.js 16+
-• Supabase account
+* Node.js 16+
+* Supabase account
 
 ### Installation
 
@@ -49,8 +53,9 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 3. Setup Database
-   • Create necessary tables using Supabase dashboard.
-   • Enable authentication.
+
+* Create necessary tables using Supabase dashboard.
+* Enable authentication.
 
 4. Start Development Server
 
@@ -72,10 +77,14 @@ inventory-management-system/
 ## Deployment
 
 1. Build Project
+
 ```bash
 npm run build
 ```
+
 2. Host on: Vercel (recommended), Netlify, or custom server.
+
+---
 
 **Development Time:** 1 day
 **Technology Stack:** React, Supabase, Tailwind CSS
