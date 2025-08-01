@@ -6,6 +6,7 @@ import DashboardHome from './pages/DashboardHome';
 import ProductManagement from './pages/ProductManagement';
 import OrderManagement from './pages/OrderManagement';
 import InventoryLog from './pages/InventoryLog';
+import Reports from './pages/Reports';
 
 
 import React from 'react'
@@ -22,7 +23,8 @@ function App() {
           <Route path="products" element={<ProductManagement />} />
           <Route path="orders" element={<OrderManagement />} />
           <Route path="inventory" element={<InventoryLog />} />
-        </Route>
+          <Route path="reports" element={<Reports />} /> 
+          </Route>
       </Routes>
     </Router>
   );
