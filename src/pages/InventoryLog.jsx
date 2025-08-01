@@ -1,8 +1,8 @@
-// ...existing imports...
+
 import React, { useState, useEffect } from 'react'
 import { Search, RefreshCw, ChevronDown, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react'
 import supabase from '../lib/supabase';
-// ...existing code...
+
 
 export default function InventoryLog() {
   const [logs, setLogs] = useState([])
