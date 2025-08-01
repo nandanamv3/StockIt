@@ -10,11 +10,11 @@ A full-stack inventory management solution built with React and Supabase. This s
 
 ### Features:
 
-• Real-time Inventory: View and manage live stock levels with alerts for low stock.
+• Real-time Inventory: View and manage live stock levels with alerts for low stock. It also has a dynamic search bar and stock status filter
 
 • User Authentication: Secure login for admin/shop owner(s).
 
-• Product Management: Add, edit, and remove products with ease.
+• Product Management: Add, edit, and remove products with ease, product filter based on category of each product. Includes product filtering based on each product's category.
 
 • Order Handling: Create and manage orders; auto-update inventory on order completion.
 
