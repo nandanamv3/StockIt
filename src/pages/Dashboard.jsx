@@ -21,7 +21,7 @@ const Dashboard = () => {
 
         {/* Page body */}
         <main className="flex-1 overflow-y-auto">
-          {/* This Outlet will render the component for the current nested route */}
+        
           <Outlet />
         </main>
       </div>
