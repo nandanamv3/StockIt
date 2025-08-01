@@ -22,6 +22,9 @@ export default function InventoryLog() {
 
   const fetchInventoryLogs = async () => {
     try {
+      // Get current user session
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
       const { data, error } = await supabase
         .from('inventory_logs')
         .select(`
@@ -31,6 +34,7 @@ export default function InventoryLog() {
             sku
           )
         `)
+        .eq('user_id', userId)
         .order('created_at', { ascending: false })
 
       if (error) throw error
