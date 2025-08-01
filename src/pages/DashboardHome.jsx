@@ -80,7 +80,6 @@ const DashboardHome = () => {
         return status === 'pending' || status === 'processing';
       }).length || 0;
 
-      // New approach to calculate total sales without a 'total_amount' column
       const { data: orderItems, error: orderItemsError } = await supabase
         .from('order_items')
         .select('order_id, product_id, quantity');
@@ -116,7 +115,6 @@ const DashboardHome = () => {
       
       const salesData = generateSalesData(salesByDayMap);
 
-      // Get top products by current stock, handling potential nulls
       const sortedProducts = (products || [])
         .filter(p => (p.quantity ?? 0) > 0)
         .sort((a, b) => (b.quantity ?? 0) - (a.quantity ?? 0))
