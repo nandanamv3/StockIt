@@ -61,7 +61,7 @@ const DashboardHome = () => {
 
       const totalProducts = products?.length || 0;
       const lowStockProductsArr = (products || []).filter(
-        (p) => (p.quantity ?? 0) <= (p.low_stock_threshold ?? 5)
+        (p) => (p.quantity ?? 0) <= (p.low_stock_threshold ?? 2)
       );
       const lowStockItems = lowStockProductsArr.length;
 
@@ -101,7 +101,7 @@ const DashboardHome = () => {
 
       // Filter for completed orders
       const completedOrderIds = new Set(orders
-        .filter(o => o.status?.toLowerCase() === 'completed' || o.status?.toLowerCase() === 'delivered' || o.status?.toLowerCase() === 'fulfilled')
+        .filter(o => o.status?.toLowerCase() === 'completed')
         .map(o => o.id));
       
       // Calculate sales from order items

@@ -47,15 +47,18 @@ export default function InventoryLog() {
 
   const fetchProducts = async () => {
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
       const { data, error } = await supabase
         .from('products')
         .select('*')
+        .eq('user_id', userId);
 
-      if (error) throw error
-      setProducts(data || [])
+      if (error) throw error;
+      setProducts(data || []);
     } catch (err) {
-      console.error('Error fetching products:', err)
-      setError('Failed to fetch products')
+      console.error('Error fetching products:', err);
+      setError('Failed to fetch products');
     }
   }
 
