@@ -29,7 +29,6 @@ const DashboardHome = () => {
     pendingOrders: 0,
   });
   const [topProducts, setTopProducts] = useState([]);
-  const [topSellingProducts, setTopSellingProducts] = useState([]);
   const [salesData, setSalesData] = useState([]);
   const [lowStockProducts, setLowStockProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -45,11 +44,9 @@ const DashboardHome = () => {
       setLoading(true);
       setError(null);
 
-      // Get current user session
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id;
 
-      // Fetch products data for the current user
       const { data: products, error: productsError } = await supabase
         .from('products')
         .select('id, name, quantity, price, low_stock_threshold, user_id')
@@ -61,7 +58,7 @@ const DashboardHome = () => {
 
       const totalProducts = products?.length || 0;
       const lowStockProductsArr = (products || []).filter(
-        (p) => (p.quantity ?? 0) <= (p.low_stock_threshold ?? 5)
+        (p) => (p.quantity ?? 0) <= (p.low_stock_threshold ?? 2)
       );
       const lowStockItems = lowStockProductsArr.length;
 
@@ -92,19 +89,15 @@ const DashboardHome = () => {
         throw orderItemsError;
       }
       
-      // We need to map products for quick lookup
       const productMap = new Map(products.map(p => [p.id, p]));
 
-      // Calculate total sales and aggregate sales by day
       let totalSales = 0;
       const salesByDayMap = new Map();
 
-      // Filter for completed orders
       const completedOrderIds = new Set(orders
-        .filter(o => o.status?.toLowerCase() === 'completed' || o.status?.toLowerCase() === 'delivered' || o.status?.toLowerCase() === 'fulfilled')
+        .filter(o => o.status?.toLowerCase() === 'completed')
         .map(o => o.id));
       
-      // Calculate sales from order items
       orderItems.forEach(item => {
         if (completedOrderIds.has(item.order_id)) {
           const product = productMap.get(item.product_id);
@@ -112,7 +105,6 @@ const DashboardHome = () => {
             const saleAmount = (product.price ?? 0) * (item.quantity ?? 0);
             totalSales += saleAmount;
 
-            // Aggregate for the sales chart
             const orderDate = orders.find(o => o.id === item.order_id)?.created_at;
             if (orderDate) {
               const dateKey = new Date(orderDate).toISOString().split('T')[0];
@@ -135,26 +127,6 @@ const DashboardHome = () => {
           revenue: ((p.price ?? 0) * (p.quantity ?? 0)).toFixed(2), // Format potential revenue
         }));
       
-      // Fetch top-selling products
-      const productSales = {};
-      orderItems.forEach(item => {
-        productSales[item.product_id] = (productSales[item.product_id] || 0) + item.quantity;
-      });
-
-      const topSellingProductIds = Object.entries(productSales)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 4)
-        .map(([id]) => id);
-
-      const topSellingProductsList = topSellingProductIds.map(id => {
-        const product = products.find(p => p.id === id);
-        return product ? {
-          ...product,
-          sales: productSales[id],
-        } : null;
-      }).filter(Boolean);
-
-      // Update the state
       setStats({
         totalSales,
         totalOrders,
@@ -164,7 +136,6 @@ const DashboardHome = () => {
       });
 
       setTopProducts(sortedProducts);
-      setTopSellingProducts(topSellingProductsList);
       setSalesData(salesData);
       setLowStockProducts(lowStockProductsArr);
     } catch (error) {
@@ -336,8 +307,9 @@ const DashboardHome = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+ 
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 flex flex-col">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-xl font-semibold text-gray-900">
               Sales Overview
@@ -347,79 +319,41 @@ const DashboardHome = () => {
               Last 7 days
             </div>
           </div>
-          {salesData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={salesData} margin={{ top: 5, right: 0, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="day" axisLine={false} tickLine={false} />
-                <YAxis axisLine={false} tickLine={false} />
-                <Tooltip
-                  formatter={(value) => [`₹${value.toLocaleString('en-IN')}`, 'Sales']}
-                  labelFormatter={(label) => `Day: ${label}`}
-                  labelStyle={{ fontWeight: 'bold' }}
-                  contentStyle={{
-                    borderRadius: '8px',
-                    borderColor: '#E5E7EB',
-                    backgroundColor: '#FFFFFF',
-                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
-                  }}
-                  itemStyle={{ color: '#4B5563' }}
-                />
-                <Bar dataKey="sales" fill="#60A5FA" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-[250px] flex items-center justify-center text-gray-500">
-              <p>No sales data available for the last 7 days.</p>
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
-          <h3 className="text-xl font-semibold text-gray-900 mb-6">
-            Top Selling Products
-          </h3>
-          <div className="space-y-4">
-            {topSellingProducts.length > 0 ? (
-              topSellingProducts.map((product, index) => (
-                <div
-                  key={product.id}
-                  className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100"
-                >
-                  <div className="flex items-center">
-                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
-                      <span className="text-green-600 font-bold text-sm">
-                        {index + 1}
-                      </span>
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-900">
-                        {product.name}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        {product.sales} units sold
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="font-bold text-gray-900">
-                      ₹{((product.price ?? 0) * (product.sales ?? 0)).toLocaleString('en-IN')}
-                    </p>
-                    <p className="text-sm text-gray-600">Total Revenue</p>
-                  </div>
-                </div>
-              ))
+          <div className="flex-1 flex items-center">
+            {salesData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={salesData} margin={{ top: 5, right: 0, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="day" axisLine={false} tickLine={false} />
+                  <YAxis axisLine={false} tickLine={false} />
+                  <Tooltip
+                    formatter={(value) => [`₹${value.toLocaleString('en-IN')}`, 'Sales']}
+                    labelFormatter={(label) => `Day: ${label}`}
+                    labelStyle={{ fontWeight: 'bold' }}
+                    contentStyle={{
+                      borderRadius: '8px',
+                      borderColor: '#E5E7EB',
+                      backgroundColor: '#FFFFFF',
+                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+                    }}
+                    itemStyle={{ color: '#4B5563' }}
+                  />
+                  <Bar dataKey="sales" fill="#60A5FA" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
             ) : (
-              <p className="text-gray-500 text-center py-4">No sales data found</p>
+              <div className="h-[250px] flex items-center justify-center text-gray-500 w-full">
+                <p>No sales data available for the last 7 days.</p>
+              </div>
             )}
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 flex flex-col">
           <h3 className="text-xl font-semibold text-gray-900 mb-6">
             Top Products by Stock
           </h3>
-          <div className="space-y-4">
+          <div className="flex-1 space-y-4">
             {topProducts.length > 0 ? (
               topProducts.map((product, index) => (
                 <div
