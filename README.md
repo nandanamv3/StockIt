@@ -1,5 +1,6 @@
 ## Inventory and Order Management System for Small Businesses
-
+StockIt is a user-friendly inventory management system built for small businesses and shop owners.
+It lets users sign in securely and manage their own products, add and track orders, view a sales dashboard, and monitor detailed inventory logs. StockIt also helps users stay organized by generating PDF reports of inventory and sales, making it easier to run and analyze their business.
 ## Problem: Inventory and Order Management System for Small Businesses
 
 **Challenge Brief:** Design and build a web-based inventory and order management system tailored for small shop owners or vendors. The system should simplify tracking of stock levels, streamline order processing, and provide essential insights like low-stock alerts and daily sales summaries, helping businesses operate efficiently with minimal technical
@@ -93,3 +94,4 @@ npm run build
 
 **Development Time:** 1 day
 **Technology Stack:** React, Supabase, Tailwind CSS
+
